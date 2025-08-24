@@ -22,10 +22,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Ejecutar tests (si tienes pytest)
-        run: |
-          pytest || echo "⚠️ No hay tests definidos"
-
   deploy:
     runs-on: ubuntu-latest
     environment: Bsale-challenge 
