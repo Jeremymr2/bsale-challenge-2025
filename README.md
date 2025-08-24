@@ -2,29 +2,11 @@
 
 API para simulación de check-in de vuelos con asignación automática de asientos.
 
-## 📋 Descripción
+## Descripción
 
 Esta API simula el proceso de check-in de vuelos, asignando automáticamente asientos a los pasajeros siguiendo reglas de negocio específicas para optimizar la experiencia de viaje de grupos y familias.
 
-## 🏗️ Arquitectura
-
-### Orden de Asignación de Asientos
-
-1. **🧒 Grupos con menores de edad** - Prioridad máxima
-   - Asientos adulto-menor adyacentes
-   - Grupos más grandes primero
-
-2. **🔗 Grupos con asientos pre-asignados** - Segunda prioridad
-   - Junta miembros restantes cerca de asientos ya asignados
-   - Cálculo de distancia optimizado
-
-3. **👥 Grupos grandes restantes** - Tercera prioridad
-   - Asientos consecutivos en la misma sección
-   - Ordenados por tamaño descendente
-
-4. **👤 Pasajeros individuales** - Última prioridad
-   - Cualquier pasajero sin asiento asignado
-   - Asientos disponibles restantes
+## Arquitectura
 
 ### Tipos de Avión Soportados
 
@@ -40,7 +22,7 @@ Fila 1:  [A] [B]   [D] [E] [F]   [H] [I]
 Fila 2:  [A] [B]   [D] [E] [F]   [H] [I]
 ```
 
-## 🚀 Instalación y Configuración
+## Instalación y Configuración
 
 ### Prerrequisitos
 
@@ -85,7 +67,7 @@ DB_PASSWORD=tu-contraseña
 DB_NAME=db-name
 ```
 
-## 🏃‍♂️ Ejecución
+## Ejecución
 
 ### Desarrollo
 
@@ -105,17 +87,17 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
 
 La API estará disponible en: `http://localhost:8000`
 
-## 📚 Documentación de la API
+## Documentación de la API
 
 ### Endpoints Principales
 
-#### 🏠 Health Check
+#### Health Check
 ```http
 GET /
 GET /health
 ```
 
-#### ✈️ Vuelos
+#### Vuelos
 ```http
 GET /flights/{flight_id}/passengers
 ```
@@ -163,7 +145,7 @@ curl -X GET "http://localhost:8000/flights/1/passengers"
 }
 ```
 
-## 🗄️ Estructura de Base de Datos
+## Estructura de Base de Datos
 
 ### Tablas Principales
 
@@ -175,7 +157,7 @@ curl -X GET "http://localhost:8000/flights/1/passengers"
 - **seat**: Asientos del avión
 - **seat_type**: Tipos de asiento (económico, business, etc.)
 
-## 🔧 Desarrollo
+## Desarrollo
 
 ### Estructura del Proyecto
 
@@ -200,3 +182,96 @@ bsale-challenge-2025/
 ├── run.py                  # Script de ejecución
 └── README.md               # Este archivo
 ```
+
+
+## Lógica Detallada de Asignación de Asientos
+
+### Algoritmo Principal
+
+El sistema implementa un algoritmo de asignación inteligente que procesa a los pasajeros en **4 fases secuenciales**, cada una con reglas específicas para optimizar la experiencia de viaje.
+
+### Fase 1: Grupos con Menores de Edad (Prioridad Máxima)
+
+**Objetivo**: Garantizar que los menores de edad (< 18 años) siempre estén sentados junto a un adulto.
+
+**Proceso**:
+1. **Identificación**: Detecta todos los grupos (mismo `purchase_id`) que contengan al menos un menor de edad
+2. **Ordenamiento**: Ordena por tamaño de grupo (más grandes primero) para maximizar opciones
+3. **Estrategia de Asignación**:
+   - **Pares Adulto-Menor Adyacentes**: Busca asientos estrictamente adyacentes (misma fila, columnas pegadas)
+   - **Agrupación por Tipo**: Procesa por separado cada tipo de asiento (económico, business, etc.)
+   - **Patrón Alternado**: Asigna en secuencia adulto-menor-adulto-menor cuando es posible
+
+**Ejemplo**:
+```
+Familia: Juan (35), María (32), Sofía (8) - purchase_id: 1
+Resultado: [1A-Juan] [1B-Sofía] [1C-María]
+```
+
+**Reglas de Adyacencia**:
+- **Avión Tipo 1**: A-B, B-C, E-F, F-G son adyacentes
+- **Avión Tipo 2**: A-B, D-E, E-F, H-I son adyacentes
+- **No adyacentes**: C-E (separados por pasillo)
+
+### Fase 2: Grupos con Asientos Pre-asignados (Segunda Prioridad)
+
+**Objetivo**: Reunir a los miembros restantes de grupos que ya tienen algunos asientos asignados.
+
+**Proceso**:
+1. **Filtrado**: Identifica grupos de 2+ personas sin menores que tengan asientos parcialmente asignados
+2. **Ordenamiento**: Prioriza grupos con menos personas sin asignar (mejor oportunidad de éxito)
+3. **Cálculo de Distancia**: Usa algoritmo de distancia optimizado para encontrar asientos cercanos
+
+**Algoritmo de Distancia**:
+```python
+distancia = diferencia_filas + (diferencia_columnas * 0.5)
+```
+- **Prioriza misma fila**: Diferencia de columnas tiene menor peso
+- **Ejemplo**: Asiento 1A vs 1C = 0 + (2 * 0.5) = 1.0
+- **Ejemplo**: Asiento 1A vs 2A = 1 + (0 * 0.5) = 1.0
+
+**Ejemplo**:
+```
+Grupo: Carlos (28), Ana (26) - purchase_id: 2
+Carlos ya asignado en 2E
+Resultado: Ana asignada en 2F (adyacente) o 2D (cercano)
+```
+
+### Fase 3: Grupos Grandes Restantes (Tercera Prioridad)
+
+**Objetivo**: Asignar grupos completos sin asientos en bloques consecutivos.
+
+**Proceso**:
+1. **Filtrado**: Solo grupos de 2+ personas completamente sin asignar y sin menores
+2. **Ordenamiento**: Grupos más grandes primero (mejor aprovechamiento de bloques)
+3. **Búsqueda de Consecutivos**: Encuentra asientos en la misma sección del avión
+
+**Definición de Consecutivos**:
+- **Misma fila**: Todos los asientos en la misma fila
+- **Misma sección**: Dentro del mismo bloque (ABC o EFG en Tipo 1)
+- **Ordenados**: Secuencia natural de columnas (A, B, C)
+
+**Ejemplo**:
+```
+Grupo de 3: Pedro, Luis, Carmen - purchase_id: 3
+Resultado: [3A-Pedro] [3B-Luis] [3C-Carmen] (consecutivos en sección ABC)
+```
+
+**Secciones por Avión**:
+- **Tipo 1**: Sección ABC (ventana-medio-pasillo), Sección EFG (pasillo-medio-ventana)
+- **Tipo 2**: Sección AB (ventana-pasillo), Sección DEF (pasillo-medio-pasillo), Sección HI (pasillo-ventana)
+
+### Fase 4: Pasajeros Restantes (Última Prioridad)
+
+**Objetivo**: Asignar cualquier pasajero que no haya recibido asiento en las fases anteriores.
+
+**Proceso**:
+1. **Sin filtros**: Procesa cualquier pasajero sin asiento, independiente del tamaño de grupo
+2. **Asignación simple**: Primer asiento disponible de su tipo
+3. **Red de seguridad**: Garantiza que nadie se quede sin asiento
+
+**Casos cubiertos**:
+- Personas que viajan solas
+- Miembros de grupos grandes que no pudieron sentarse juntos
+- Pasajeros de grupos con menores donde no todos cupieron cerca
+- Cualquier caso edge no cubierto por fases anteriores
