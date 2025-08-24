@@ -140,23 +140,24 @@ curl -X GET "http://localhost:8000/flights/1/passengers"
   "code": 200,
   "data": {
     "flightId": 1,
-    "takeoffDateTime": "2024-12-25T10:30:00",
-    "takeoffAirport": "SCL",
-    "landingDateTime": "2024-12-25T14:45:00",
-    "landingAirport": "LIM",
+    "takeoffDateTime": 1688207580,
+    "takeoffAirport": "Aeropuerto Internacional Arturo Merino Benitez, Chile",
+    "landingDateTime": 1688221980,
+    "landingAirport": "Aeropuerto Internacional Jorge Cháve, Perú",
     "airplaneId": 1,
     "passengers": [
       {
-        "passengerId": 1,
-        "dni": "12345678",
-        "name": "Juan Pérez",
-        "age": 35,
+        "passengerId": 515,
+        "dni": 41771513,
+        "name": "Camila",
+        "age": 80,
         "country": "Chile",
         "boardingPassId": 1,
-        "purchaseId": 1,
-        "seatTypeId": 1,
-        "seatId": 15
-      }
+        "purchaseId": 69,
+        "seatTypeId": 2,
+        "seatId": 87
+      },
+...
     ]
   }
 }
@@ -166,12 +167,13 @@ curl -X GET "http://localhost:8000/flights/1/passengers"
 
 ### Tablas Principales
 
-- **flights**: Información de vuelos
-- **passengers**: Datos de pasajeros
-- **boarding_passes**: Tarjetas de embarque
-- **seats**: Asientos del avión
-- **seat_types**: Tipos de asiento (económico, business, etc.)
-- **purchases**: Compras agrupadas
+- **airplane**: Información del avión
+- **boarding_pass**: Tarjetas de embarque
+- **flight**: Información de vuelos
+- **passenger**: Datos de pasajeros
+- **purchase**: Compras agrupadas
+- **seat**: Asientos del avión
+- **seat_type**: Tipos de asiento (económico, business, etc.)
 
 ## 🔧 Desarrollo
 
@@ -189,8 +191,10 @@ bsale-challenge-2025/
 │   │   └── flights.py       # Endpoints de vuelos
 │   ├── schemas/
 │   │   └── auto_camel_schemas.py  # Esquemas Pydantic
-│   └── services/
-│       └── seat_assignment.py    # Lógica de asignación de asientos
+│   ├── services/
+│   │   └── seat_assignment.py    # Lógica de asignación de asientos
+│   └── utils/
+│       └── case_converter.py    # Función que transforma de snake_case a camelCase
 ├── .env                     # Variables de entorno
 ├── requirements.txt         # Dependencias
 ├── run.py                  # Script de ejecución
