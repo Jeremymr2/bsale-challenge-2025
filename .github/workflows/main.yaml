@@ -39,9 +39,14 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.AWS_KEY }}
 
+      - name: Add remote host to known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.AWS_HOST }} >> ~/.ssh/known_hosts
+
       - name: Copiar archivos al servidor
         run: |
-          rsync -avz --exclude 'venv' ./ ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:/home/${{ secrets.AWS_USER }}/bsale-challenge
+          rsync -avz  --exclude 'venv' ./ ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:/home/${{ secrets.AWS_USER }}/bsale-challenge
 
       - name: Instalar dependencias en servidor
         run: |
