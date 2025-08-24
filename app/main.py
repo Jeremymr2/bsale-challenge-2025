@@ -1,7 +1,8 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from app.database import engine, get_db
+from app.database import get_db
+from app.routers import flights_router
 
 # Crear la aplicación FastAPI
 app = FastAPI(
@@ -9,6 +10,9 @@ app = FastAPI(
     description="API para simulación de check-in de vuelos con asignación automática de asientos",
     version="1.0.0"
 )
+
+# Incluir los routers
+app.include_router(flights_router, tags=["flights"])
 
 @app.get("/")
 async def root():
