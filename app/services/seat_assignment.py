@@ -24,9 +24,16 @@ class SeatAssignmentService:
         airplane_id = boarding_passes[0].flight.airplane_id
         available_seats = self._get_available_seats(airplane_id, flight_id)
         purchase_groups = self._group_by_purchase(boarding_passes)
+
+        # Pre-cargar todos los asientos para evitar consultas individuales
+        self.all_seats_cache = self._load_all_seats_cache(airplane_id)
         
         print ("Asignando asientos para grupos con menores de edad")
         self._assign_groups_with_minors(purchase_groups, available_seats, airplane_id)
+
+        print ("Asignando asientos para grupos con asientos preasignados")
+        self._assign_groups_with_pre_assigned(purchase_groups, available_seats)
+
         print ("Asignando asientos para el resto de los pasajeros")
         self._assign_individuals(purchase_groups, available_seats)
         
@@ -108,6 +115,63 @@ class SeatAssignmentService:
         return None
 
 
+    def _assign_near_existing_seats(self, unassigned: List[BoardingPass], 
+                                  assigned: List[BoardingPass], available_seats: Dict[int, List[Seat]]) -> None:
+        """Asigna pasajeros cerca de otros miembros del grupo que ya tienen asiento."""
+        # Pre-cargar asientos asignados para evitar consultas repetidas
+        assigned_seats = []
+        for assigned_bp in assigned:
+            if assigned_bp.seat_id:
+                seat = self._find_seat_by_id(assigned_bp.seat_id)
+                if seat:
+                    assigned_seats.append(seat)
+        if not assigned_seats:
+            return
+        for bp in unassigned:
+            if bp.seat_type_id not in available_seats:
+                continue
+            best_seat = None
+            min_distance = float('inf')
+            # Buscar el mejor asiento disponible
+            for available_seat in available_seats[bp.seat_type_id]:
+                # Calcular distancia mínima a cualquier asiento asignado
+                min_dist_to_group = min(
+                    self._calculate_seat_distance(available_seat, assigned_seat)
+                    for assigned_seat in assigned_seats
+                )
+                if min_dist_to_group < min_distance:
+                    min_distance = min_dist_to_group
+                    best_seat = available_seat
+            # Asignar el mejor asiento encontrado
+            if best_seat:
+                bp.seat_id = best_seat.seat_id
+                available_seats[best_seat.seat_type_id].remove(best_seat)
+
+
+    def _get_column_index(self, column: str) -> int:
+        """Índice de columna."""
+        return ord(column) - ord('A')
+    
+
+    def _find_seat_by_id(self, seat_id: int) -> Optional[Seat]:
+        """Encuentra un asiento por su ID usando cache."""
+        return self.all_seats_cache.get(seat_id)
+    
+
+    def _load_all_seats_cache(self, airplane_id: int) -> Dict[int, Seat]:
+        """Pre-carga todos los asientos del avión en un diccionario para acceso rápido."""
+        all_seats = self.db.query(Seat).filter(Seat.airplane_id == airplane_id).all()
+        return {seat.seat_id: seat for seat in all_seats}
+    
+
+    def _calculate_seat_distance(self, seat1: Seat, seat2: Seat) -> float:
+        """Calcula la distancia entre dos asientos."""
+        row_diff = abs(seat1.seat_row - seat2.seat_row)
+        col_diff = abs(self._get_column_index(seat1.seat_column) - 
+                      self._get_column_index(seat2.seat_column))
+        return row_diff + col_diff * 0.5  # Priorizar misma fila
+    
+
     def _get_next_seat(self, seat_type_id: int, available_seats: Dict[int, List[Seat]]) -> Optional[Seat]:
         """Obtiene siguiente asiento disponible."""
         if seat_type_id in available_seats and available_seats[seat_type_id]:
@@ -143,6 +207,29 @@ class SeatAssignmentService:
                 self._assign_minor_adult_pairs(passengers['minors'], passengers['adults'], 
                                              seat_type_id, available_seats, airplane_id)
     
+
+    def _assign_groups_with_pre_assigned(self, purchase_groups: Dict[int, List[BoardingPass]], 
+                                       available_seats: Dict[int, List[Seat]]) -> None:
+        """Asigna grupos que ya tienen algunos asientos asignados, juntando el resto cerca."""
+        groups_with_assigned = []
+        
+        for group in purchase_groups.values():
+            if len(group) > 1:  # Solo grupos de 2+ personas
+                assigned = [bp for bp in group if bp.seat_id]
+                unassigned = [bp for bp in group if not bp.seat_id]
+                
+                # Debe tener al menos uno asignado y uno sin asignar
+                # Y no debe tener menores (ya fueron procesados)
+                if assigned and unassigned and not any(bp.passenger.age < 18 for bp in group):
+                    groups_with_assigned.append((group, assigned, unassigned))
+        
+        # Ordenar por cantidad de personas sin asignar (menos primero para mejor oportunidad)
+        groups_with_assigned.sort(key=lambda x: len(x[2]))
+        
+        for group, assigned, unassigned in groups_with_assigned:
+            self._assign_near_existing_seats(unassigned, assigned, available_seats)
+
+
     def _assign_individuals(self, purchase_groups: Dict[int, List[BoardingPass]], 
                           available_seats: Dict[int, List[Seat]]) -> None:
         """Asigna asientos a todos los pasajeros sin asiento."""
