@@ -46,12 +46,12 @@ jobs:
 
       - name: Copiar archivos al servidor
         run: |
-          rsync -avz  --exclude 'venv' ./ ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:/home/${{ secrets.AWS_USER }}/bsale-challenge
+          rsync -avz  --exclude 'venv' ./ ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }}:/opt/bsale-challenge-2025
 
       - name: Instalar dependencias en servidor
         run: |
           ssh ${{ secrets.AWS_USER }}@${{ secrets.AWS_HOST }} << 'EOF'
-            cd ~/bsale-challenge
+            cd /opt/bsale-challenge-2025
             python3 -m venv venv
             source venv/bin/activate
             pip install -r requirements.txt
