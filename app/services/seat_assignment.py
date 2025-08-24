@@ -34,6 +34,9 @@ class SeatAssignmentService:
         print ("Asignando asientos para grupos con asientos preasignados")
         self._assign_groups_with_pre_assigned(purchase_groups, available_seats)
 
+        print ("Asignando asientos por grupos")
+        self._assign_remaining_groups(purchase_groups, available_seats, airplane_id)
+
         print ("Asignando asientos para el resto de los pasajeros")
         self._assign_individuals(purchase_groups, available_seats)
         
@@ -148,6 +151,60 @@ class SeatAssignmentService:
                 available_seats[best_seat.seat_type_id].remove(best_seat)
 
 
+    def _find_consecutive_seats(self, count: int, seat_type_id: int, 
+                              available_seats: Dict[int, List[Seat]], airplane_id: int) -> List[Seat]:
+        """Encuentra asientos consecutivos."""
+        if seat_type_id not in available_seats or len(available_seats[seat_type_id]) < count:
+            return []
+        
+        seats = available_seats[seat_type_id]
+        config = self.airplane_configs.get(airplane_id, self.airplane_configs[1])
+        
+        # Pre-convertir secciones a sets para búsqueda O(1)
+        section_sets = [set(section) for section in config['sections']]
+        
+        # Agrupar por fila y pre-ordenar
+        by_row = defaultdict(list)
+        for seat in seats:
+            by_row[seat.seat_row].append(seat)
+        
+        # Buscar consecutivos en cada fila
+        for row_seats in by_row.values():
+            if len(row_seats) < count:
+                continue
+            
+            # Ordenar una sola vez por fila
+            row_seats.sort(key=lambda s: self._get_column_index(s.seat_column))
+            
+            # Buscar secuencia en cada sección
+            for section_set in section_sets:
+                section_seats = [s for s in row_seats if s.seat_column in section_set]
+                if len(section_seats) >= count:
+                    return section_seats[:count]
+        
+        return []
+
+
+    def _assign_group_together(self, passengers: List[BoardingPass], seat_type_id: int, 
+                             available_seats: Dict[int, List[Seat]], airplane_id: int) -> None:
+        """Asigna grupo junto cuando es posible."""
+        if seat_type_id not in available_seats:
+            return
+        consecutive = self._find_consecutive_seats(len(passengers), seat_type_id, available_seats, airplane_id)
+        if consecutive:
+            for i, bp in enumerate(passengers):
+                if i < len(consecutive):
+                    bp.seat_id = consecutive[i].seat_id
+                    available_seats[seat_type_id].remove(consecutive[i])
+        else:
+            # Asignar individualmente
+            for bp in passengers:
+                seat = self._get_next_seat(seat_type_id, available_seats)
+                if seat:
+                    bp.seat_id = seat.seat_id
+                    available_seats[seat_type_id].remove(seat)
+
+
     def _get_column_index(self, column: str) -> int:
         """Índice de columna."""
         return ord(column) - ord('A')
@@ -225,9 +282,25 @@ class SeatAssignmentService:
         
         # Ordenar por cantidad de personas sin asignar (menos primero para mejor oportunidad)
         groups_with_assigned.sort(key=lambda x: len(x[2]))
-        
+
         for group, assigned, unassigned in groups_with_assigned:
             self._assign_near_existing_seats(unassigned, assigned, available_seats)
+
+
+    def _assign_remaining_groups(self, purchase_groups: Dict[int, List[BoardingPass]], 
+                               available_seats: Dict[int, List[Seat]], airplane_id: int) -> None:
+        """Asigna grupos restantes por tamaño."""
+        remaining_groups = [group for group in purchase_groups.values() 
+                           if (len(group) > 1 and 
+                               not any(bp.passenger.age < 18 for bp in group) and
+                               not any(bp.seat_id for bp in group))]  # Solo grupos completamente sin asignar
+        remaining_groups.sort(key=len, reverse=True)
+        for group in remaining_groups:
+            by_type = defaultdict(list)
+            for bp in group:
+                by_type[bp.seat_type_id].append(bp)
+            for seat_type_id, passengers in by_type.items():
+                self._assign_group_together(passengers, seat_type_id, available_seats, airplane_id)
 
 
     def _assign_individuals(self, purchase_groups: Dict[int, List[BoardingPass]], 
