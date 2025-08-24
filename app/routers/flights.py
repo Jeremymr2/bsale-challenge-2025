@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import DisconnectionError, OperationalError
 from typing import Union
@@ -18,7 +18,7 @@ router = APIRouter()
 
 @router.get("/flights/{flight_id}/passengers", 
            response_model=Union[FlightResponse, FlightNotFoundResponse, FlightErrorResponse])
-async def get_flight_passengers(flight_id: int, db: Session = Depends(get_db)):
+async def get_flight_passengers(flight_id: int, response: Response, db: Session = Depends(get_db)):
     """
     Obtiene los pasajeros de un vuelo con asientos asignados mediante simulación de check-in.
     """
@@ -26,6 +26,7 @@ async def get_flight_passengers(flight_id: int, db: Session = Depends(get_db)):
         # Verificar si el vuelo existe
         flight = db.query(Flight).filter(Flight.flight_id == flight_id).first()
         if not flight:
+            response.status_code = 404
             return FlightNotFoundResponse()
         
         # Simular asignación de asientos
@@ -43,6 +44,7 @@ async def get_flight_passengers(flight_id: int, db: Session = Depends(get_db)):
                 airplane_id=flight.airplane_id,
                 passengers=[]
             )
+            response.status_code = 200
             return FlightResponse(code=200, data=flight_data)
         
         # Convertir a formato de respuesta (snake_case a camelCase) - Base
@@ -73,9 +75,12 @@ async def get_flight_passengers(flight_id: int, db: Session = Depends(get_db)):
             passengers=passengers_data
         )
         
+        response.status_code = 200
         return FlightResponse(code=200, data=flight_data)
         
     except (DisconnectionError, OperationalError):
+        response.status_code = 400
         return FlightErrorResponse(code=400, errors="could not connect to db")
     except Exception as e:
+        response.status_code = 400
         return FlightErrorResponse(code=400, errors=f"could not connect to db: {str(e)}")
