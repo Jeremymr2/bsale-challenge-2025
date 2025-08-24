@@ -16,7 +16,7 @@ app.include_router(flights_router, tags=["flights"])
 
 @app.get("/")
 async def root():
-    return {"message": "[Bsale Challenge] Flight Check-in API is running"}
+    return {"message": "[Bsale Challenge] Flight Check-in API is running - Test GitHub Actions"}
 
 @app.get("/health")
 async def health_check(db: Session = Depends(get_db)):
