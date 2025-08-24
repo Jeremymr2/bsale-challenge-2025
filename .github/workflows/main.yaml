@@ -1,4 +1,4 @@
-name: FastAPI CI/CD
+name: Bsale Challenge - CI/CD FastApi AWS lambda
 
 on:
   # Trigger the workflow on push
