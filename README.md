@@ -44,7 +44,7 @@ Fila 2:  [A] [B]   [D] [E] [F]   [H] [I]
 
 ### Prerrequisitos
 
-- Python 3.8+
+- Python 3.10
 - MySQL 8.0+
 - pip (gestor de paquetes de Python)
 
